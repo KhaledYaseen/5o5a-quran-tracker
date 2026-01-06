@@ -13,6 +13,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <style>
     .arabic { font-family: 'Amiri', serif; }
+    .calendar-day { transition: all 0.2s; }
+    .calendar-day:hover { transform: scale(1.05); }
+    .streak-fire { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
   </style>
 </head>
 <body>
@@ -20,15 +27,8 @@
   
   <script type="text/babel">
     // ============================================
-    // FIREBASE CONFIGURATION - REPLACE WITH YOUR OWN
+    // FIREBASE CONFIGURATION
     // ============================================
-    // Follow these steps to get your Firebase config:
-    // 1. Go to https://console.firebase.google.com/
-    // 2. Create a new project (free)
-    // 3. Click "Realtime Database" → "Create Database" → Start in test mode
-    // 4. Click the gear icon → Project Settings → Scroll to "Your apps" → Click web icon (</>)
-    // 5. Register your app and copy the config below
-    
     const firebaseConfig = {
       apiKey: "AIzaSyB1xvU_5kmFUh41Q_8csroDwOmNm6VAXh0",
       authDomain: "family-quran-tracker.firebaseapp.com",
@@ -40,18 +40,8 @@
     };
     
     // Initialize Firebase
-    let database = null;
-    let firebaseInitialized = false;
-    
-    try {
-      if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-        firebase.initializeApp(firebaseConfig);
-        database = firebase.database();
-        firebaseInitialized = true;
-      }
-    } catch (e) {
-      console.error("Firebase init error:", e);
-    }
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
     // ============================================
     // APP CONFIGURATION
@@ -66,77 +56,62 @@
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    // Icons as simple SVG components
-    const BookIcon = () => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
-      </svg>
-    );
-    
-    const CheckIcon = () => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="20 6 9 17 4 12"/>
-      </svg>
-    );
-    
-    const UsersIcon = () => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    );
-    
-    const StarIcon = () => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-      </svg>
-    );
-    
-    const AwardIcon = () => (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="8" r="6"/>
-        <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>
-      </svg>
-    );
+    // Scoring System
+    const POINTS = {
+      SAME_DAY: 10,      // Reading and logging on the same day
+      NEXT_DAY: 5,       // Logging the next day
+      LATE: 2,           // Logging 2+ days later
+      STREAK_BONUS: 5,   // Bonus per day of streak
+      FULL_DAY_BONUS: 5  // Bonus for completing all 4 pages
+    };
+
+    // Icons
+    const Icons = {
+      Book: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+      Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+      Users: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+      Star: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+      Award: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>,
+      Calendar: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+      Trophy: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+      Fire: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+      ChevronLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
+      ChevronRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
+    };
 
     function QuranTracker() {
       const [currentUser, setCurrentUser] = React.useState(null);
       const [readingData, setReadingData] = React.useState({});
+      const [logTimestamps, setLogTimestamps] = React.useState({});
       const [loading, setLoading] = React.useState(true);
       const [saving, setSaving] = React.useState(false);
       const [selectedMonth, setSelectedMonth] = React.useState(null);
       const [selectedYear, setSelectedYear] = React.useState(null);
-      const [showSetup, setShowSetup] = React.useState(!firebaseInitialized);
+      const [selectedDay, setSelectedDay] = React.useState(null);
+      const [view, setView] = React.useState('home'); // home, tracker, calendar, leaderboard
 
       const today = new Date();
       const currentDay = Math.min(today.getDate(), 30);
       const currentMonth = today.getMonth();
       const currentYear = today.getFullYear();
 
-      // Initialize with current date
       React.useEffect(() => {
         setSelectedMonth(today.getMonth());
         setSelectedYear(today.getFullYear());
+        setSelectedDay(currentDay);
       }, []);
 
       // Load data from Firebase
       React.useEffect(() => {
-        if (!firebaseInitialized) {
-          setLoading(false);
-          return;
-        }
-        
         const dataRef = database.ref('quran-tracker');
         dataRef.on('value', (snapshot) => {
           const data = snapshot.val();
-          if (data && data.readings) {
-            setReadingData(data.readings);
+          if (data) {
+            setReadingData(data.readings || {});
+            setLogTimestamps(data.timestamps || {});
           }
           setLoading(false);
         });
-
         return () => dataRef.off();
       }, []);
 
@@ -155,10 +130,12 @@
         ? getRotatedOrder(selectedMonth, selectedYear) 
         : BASE_FAMILY_ORDER;
 
-      const getMemberPosition = (memberName) => familyOrder.indexOf(memberName);
+      const getMemberPosition = (memberName, month = selectedMonth, year = selectedYear) => {
+        return getRotatedOrder(month, year).indexOf(memberName);
+      };
 
-      const getPageNumbers = (memberName, day) => {
-        const position = getMemberPosition(memberName);
+      const getPageNumbers = (memberName, day, month = selectedMonth, year = selectedYear) => {
+        const position = getMemberPosition(memberName, month, year);
         const dayStartPage = START_PAGE + (day - 1) * 20;
         const memberStartPage = dayStartPage + (position * PAGES_PER_PERSON);
         return {
@@ -169,14 +146,18 @@
       };
 
       const togglePage = async (memberId, day, month, year, pageNumber) => {
-        if (!firebaseInitialized) return;
-        
         const key = `${memberId}-${year}-${month}-${day}-${pageNumber}`;
         const newValue = !readingData[key];
+        const timestamp = new Date().toISOString();
         
         setSaving(true);
         try {
           await database.ref(`quran-tracker/readings/${key}`).set(newValue || null);
+          if (newValue) {
+            await database.ref(`quran-tracker/timestamps/${key}`).set(timestamp);
+          } else {
+            await database.ref(`quran-tracker/timestamps/${key}`).remove();
+          }
         } catch (e) {
           console.error('Save error:', e);
         }
@@ -186,6 +167,86 @@
       const isPageRead = (memberId, day, month, year, pageNumber) => {
         const key = `${memberId}-${year}-${month}-${day}-${pageNumber}`;
         return readingData[key] || false;
+      };
+
+      const getLogTimestamp = (memberId, day, month, year, pageNumber) => {
+        const key = `${memberId}-${year}-${month}-${day}-${pageNumber}`;
+        return logTimestamps[key] ? new Date(logTimestamps[key]) : null;
+      };
+
+      // Calculate points for a single page
+      const getPointsForPage = (memberId, day, month, year, pageNumber) => {
+        if (!isPageRead(memberId, day, month, year, pageNumber)) return 0;
+        
+        const logDate = getLogTimestamp(memberId, day, month, year, pageNumber);
+        if (!logDate) return POINTS.LATE;
+
+        const readingDate = new Date(year, month, day);
+        const diffDays = Math.floor((logDate - readingDate) / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return POINTS.SAME_DAY;
+        if (diffDays === 1) return POINTS.NEXT_DAY;
+        return POINTS.LATE;
+      };
+
+      // Calculate total points for a member
+      const getMemberPoints = (memberId, month = selectedMonth, year = selectedYear) => {
+        let points = 0;
+        const monthOrder = getRotatedOrder(month, year);
+        
+        for (let day = 1; day <= TOTAL_DAYS; day++) {
+          const position = monthOrder.indexOf(memberId);
+          const dayStartPage = START_PAGE + (day - 1) * 20;
+          const memberStartPage = dayStartPage + (position * PAGES_PER_PERSON);
+          
+          let dayComplete = true;
+          for (let i = 0; i < PAGES_PER_PERSON; i++) {
+            const pageNum = memberStartPage + i;
+            const pagePoints = getPointsForPage(memberId, day, month, year, pageNum);
+            points += pagePoints;
+            if (!isPageRead(memberId, day, month, year, pageNum)) {
+              dayComplete = false;
+            }
+          }
+          
+          // Bonus for completing all 4 pages in a day
+          if (dayComplete) {
+            points += POINTS.FULL_DAY_BONUS;
+          }
+        }
+
+        // Streak bonus
+        const streak = getMemberStreak(memberId, month, year);
+        points += streak * POINTS.STREAK_BONUS;
+
+        return points;
+      };
+
+      // Calculate streak (consecutive days completed)
+      const getMemberStreak = (memberId, month = selectedMonth, year = selectedYear) => {
+        let streak = 0;
+        const monthOrder = getRotatedOrder(month, year);
+        
+        for (let day = currentDay; day >= 1; day--) {
+          const position = monthOrder.indexOf(memberId);
+          const dayStartPage = START_PAGE + (day - 1) * 20;
+          const memberStartPage = dayStartPage + (position * PAGES_PER_PERSON);
+          
+          let dayComplete = true;
+          for (let i = 0; i < PAGES_PER_PERSON; i++) {
+            if (!isPageRead(memberId, day, month, year, memberStartPage + i)) {
+              dayComplete = false;
+              break;
+            }
+          }
+          
+          if (dayComplete) {
+            streak++;
+          } else {
+            break;
+          }
+        }
+        return streak;
       };
 
       const getPagesReadByMemberForMonth = (memberId, month, year) => {
@@ -202,10 +263,9 @@
         return count;
       };
 
-      const getPagesReadToday = (memberId) => {
-        if (selectedMonth !== currentMonth || selectedYear !== currentYear) return 0;
-        const pageNums = getPageNumbers(memberId, currentDay);
-        return pageNums.pages.filter(p => isPageRead(memberId, currentDay, currentMonth, currentYear, p)).length;
+      const getPagesReadForDay = (memberId, day, month = selectedMonth, year = selectedYear) => {
+        const pages = getPageNumbers(memberId, day, month, year);
+        return pages.pages.filter(p => isPageRead(memberId, day, month, year, p)).length;
       };
 
       const getTotalFamilyPagesForMonth = () => {
@@ -215,93 +275,25 @@
 
       const getJuzCompleted = () => Math.floor(getTotalFamilyPagesForMonth() / 20);
 
-      const isToday = selectedMonth === currentMonth && selectedYear === currentYear;
+      const isCurrentMonth = selectedMonth === currentMonth && selectedYear === currentYear;
 
-      // Setup Instructions Screen
-      if (showSetup) {
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6">
-            <div className="max-w-2xl mx-auto">
-              <div className="text-center mb-8 pt-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-amber-400/20 rounded-full mb-4">
-                  <span className="text-4xl">⚙️</span>
-                </div>
-                <h1 className="text-3xl font-bold text-white mb-2">Setup Required</h1>
-                <p className="text-emerald-200">One-time setup to enable data sharing</p>
-              </div>
+      // Get leaderboard sorted by points
+      const getLeaderboard = () => {
+        return BASE_FAMILY_ORDER
+          .map(member => ({
+            name: member,
+            points: getMemberPoints(member),
+            pages: getPagesReadByMemberForMonth(member, selectedMonth, selectedYear),
+            streak: getMemberStreak(member)
+          }))
+          .sort((a, b) => b.points - a.points);
+      };
 
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6">
-                <h2 className="text-xl font-bold text-white mb-4">📋 Setup Instructions</h2>
-                <div className="space-y-4 text-emerald-100">
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <h3 className="font-bold text-amber-300 mb-2">Step 1: Create Firebase Project (Free)</h3>
-                    <ol className="list-decimal list-inside space-y-1 text-sm">
-                      <li>Go to <a href="https://console.firebase.google.com/" target="_blank" className="text-amber-300 underline">console.firebase.google.com</a></li>
-                      <li>Sign in with Google account</li>
-                      <li>Click "Create a project"</li>
-                      <li>Name it "family-quran-tracker"</li>
-                      <li>Disable Google Analytics (optional)</li>
-                      <li>Click "Create project"</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <h3 className="font-bold text-amber-300 mb-2">Step 2: Create Database</h3>
-                    <ol className="list-decimal list-inside space-y-1 text-sm">
-                      <li>In left menu, click "Build" → "Realtime Database"</li>
-                      <li>Click "Create Database"</li>
-                      <li>Choose any location, click "Next"</li>
-                      <li>Select "Start in <strong>test mode</strong>"</li>
-                      <li>Click "Enable"</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <h3 className="font-bold text-amber-300 mb-2">Step 3: Get Your Config</h3>
-                    <ol className="list-decimal list-inside space-y-1 text-sm">
-                      <li>Click the ⚙️ gear icon → "Project settings"</li>
-                      <li>Scroll down to "Your apps"</li>
-                      <li>Click the web icon {"</>"}</li>
-                      <li>Name it "quran-tracker", click "Register"</li>
-                      <li>Copy the firebaseConfig values</li>
-                    </ol>
-                  </div>
-                  
-                  <div className="bg-white/10 rounded-xl p-4">
-                    <h3 className="font-bold text-amber-300 mb-2">Step 4: Update This File</h3>
-                    <ol className="list-decimal list-inside space-y-1 text-sm">
-                      <li>Open this HTML file in a text editor</li>
-                      <li>Find "firebaseConfig" near the top</li>
-                      <li>Replace YOUR_API_KEY, YOUR_PROJECT, etc. with your values</li>
-                      <li>Save the file and refresh</li>
-                    </ol>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-amber-400/20 rounded-2xl p-4 text-center">
-                <p className="text-amber-200 text-sm">
-                  💡 After setup, share this HTML file with your family. Everyone will see the same data!
-                </p>
-              </div>
-              
-              <button
-                onClick={() => setShowSetup(false)}
-                className="w-full mt-4 p-4 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-all"
-              >
-                Preview App Without Data Storage →
-              </button>
-            </div>
-          </div>
-        );
-      }
-
-      // Loading Screen
       if (loading || selectedMonth === null) {
         return (
           <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 flex items-center justify-center">
             <div className="text-center text-white">
-              <div className="w-16 h-16 mx-auto mb-4 animate-pulse text-amber-300">🌙</div>
+              <div className="text-6xl mb-4 animate-pulse">🌙</div>
               <p className="text-xl">Loading your family's progress...</p>
             </div>
           </div>
@@ -310,29 +302,24 @@
 
       // Login Screen
       if (!currentUser) {
+        const leaderboard = getLeaderboard();
+        const totalPages = getTotalFamilyPagesForMonth();
+        const progress = Math.round((totalPages / TOTAL_PAGES) * 100);
+
         return (
-          <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-6">
+          <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-4">
             <div className="max-w-md mx-auto">
               {/* Header */}
-              <div className="text-center mb-8 pt-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-amber-400/20 rounded-full mb-4">
-                  <span className="text-amber-300 w-10 h-10"><BookIcon /></span>
+              <div className="text-center mb-6 pt-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-400/20 rounded-full mb-3">
+                  <span className="text-amber-300 w-8 h-8"><Icons.Book /></span>
                 </div>
-                <h1 className="text-3xl font-bold text-white mb-2">Quran Reading Tracker</h1>
-                <p className="text-emerald-200 text-2xl arabic">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
-                <p className="text-emerald-300 text-sm mt-2">Complete the Quran together in 30 days</p>
-                {!firebaseInitialized && (
-                  <button 
-                    onClick={() => setShowSetup(true)}
-                    className="mt-2 text-amber-300 text-xs underline"
-                  >
-                    ⚠️ Data not saving - Click to setup
-                  </button>
-                )}
+                <h1 className="text-2xl font-bold text-white mb-1">Quran Reading Tracker</h1>
+                <p className="text-emerald-200 text-xl arabic">بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</p>
               </div>
 
               {/* Month Selector */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-6">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 mb-4">
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => {
@@ -345,11 +332,11 @@
                     }}
                     className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
                   >
-                    ←
+                    <Icons.ChevronLeft />
                   </button>
                   <div className="text-center">
-                    <p className="text-white font-semibold text-lg">{MONTH_NAMES[selectedMonth]} {selectedYear}</p>
-                    <p className="text-emerald-300 text-xs">🔄 Rotation: {familyOrder[0]} leads</p>
+                    <p className="text-white font-semibold">{MONTH_NAMES[selectedMonth]} {selectedYear}</p>
+                    <p className="text-emerald-300 text-xs">🔄 {familyOrder[0]} leads</p>
                   </div>
                   <button
                     onClick={() => {
@@ -362,88 +349,113 @@
                     }}
                     className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
                   >
-                    →
+                    <Icons.ChevronRight />
                   </button>
                 </div>
               </div>
 
-              {/* Family Progress */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-amber-300"><UsersIcon /></span>
-                  <h2 className="text-white font-semibold">Family Progress - {MONTH_NAMES[selectedMonth]}</h2>
+              {/* Quick Stats */}
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-white/10 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-300">{getJuzCompleted()}</p>
+                  <p className="text-emerald-200 text-xs">Juz</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/10 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-300">{getJuzCompleted()}</p>
-                    <p className="text-emerald-200 text-sm">Juz Completed</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-4 text-center">
-                    <p className="text-3xl font-bold text-amber-300">{getTotalFamilyPagesForMonth()}</p>
-                    <p className="text-emerald-200 text-sm">Pages Read</p>
-                  </div>
+                <div className="bg-white/10 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-300">{totalPages}</p>
+                  <p className="text-emerald-200 text-xs">Pages</p>
                 </div>
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm text-emerald-200 mb-1">
-                    <span>Overall Progress</span>
-                    <span>{Math.round((getTotalFamilyPagesForMonth() / TOTAL_PAGES) * 100)}%</span>
-                  </div>
-                  <div className="h-3 bg-emerald-950 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min((getTotalFamilyPagesForMonth() / TOTAL_PAGES) * 100, 100)}%` }}
-                    />
-                  </div>
+                <div className="bg-white/10 rounded-xl p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-300">{progress}%</p>
+                  <p className="text-emerald-200 text-xs">Done</p>
                 </div>
               </div>
 
-              {/* Reading Order */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-6">
-                <h3 className="text-white font-semibold mb-3 text-sm">Page Order This Month</h3>
-                <div className="flex justify-between text-xs">
-                  {familyOrder.map((name, idx) => (
-                    <div key={name} className="text-center">
-                      <div className="w-8 h-8 mx-auto bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-emerald-900 font-bold text-sm mb-1">
+              {/* Progress Bar */}
+              <div className="bg-white/10 rounded-xl p-3 mb-4">
+                <div className="h-3 bg-emerald-950 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(progress, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Leaderboard Preview */}
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-amber-300"><Icons.Trophy /></span>
+                  <h2 className="text-white font-semibold">Leaderboard</h2>
+                </div>
+                <div className="space-y-2">
+                  {leaderboard.map((member, idx) => (
+                    <div key={member.name} className="flex items-center gap-3 p-2 bg-white/5 rounded-lg">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        idx === 0 ? 'bg-amber-400 text-emerald-900' :
+                        idx === 1 ? 'bg-gray-300 text-gray-800' :
+                        idx === 2 ? 'bg-amber-600 text-white' :
+                        'bg-white/20 text-white'
+                      }`}>
                         {idx + 1}
                       </div>
-                      <p className="text-emerald-200">{name}</p>
-                      <p className="text-emerald-400 text-xs">+{idx * 4}</p>
+                      <div className="flex-1">
+                        <p className="text-white text-sm font-medium">{member.name}</p>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-amber-300">{member.points} pts</span>
+                          {member.streak > 0 && (
+                            <span className="text-orange-400 flex items-center gap-1">
+                              <span className="streak-fire">🔥</span> {member.streak}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-emerald-300 text-sm">{member.pages} pages</span>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Family Member Selection */}
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-                <h2 className="text-white font-semibold mb-4">Who's reading?</h2>
-                <div className="space-y-3">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                <h2 className="text-white font-semibold mb-3">Who's reading?</h2>
+                <div className="space-y-2">
                   {BASE_FAMILY_ORDER.map((member) => {
-                    const todayPages = isToday ? getPageNumbers(member, currentDay) : null;
-                    const pagesReadToday = getPagesReadToday(member);
+                    const todayPages = isCurrentMonth ? getPageNumbers(member, currentDay) : null;
+                    const pagesReadToday = getPagesReadForDay(member, currentDay);
+                    const streak = getMemberStreak(member);
                     return (
                       <button
                         key={member}
-                        onClick={() => setCurrentUser(member)}
-                        className="w-full flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-xl transition-all group"
+                        onClick={() => { setCurrentUser(member); setView('tracker'); setSelectedDay(currentDay); }}
+                        className="w-full flex items-center justify-between p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-all"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-emerald-900 font-bold text-lg">
-                            {member.charAt(0)}
+                          <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-emerald-900 font-bold">
+                            {member[0]}
                           </div>
                           <div className="text-left">
-                            <p className="text-white font-medium text-lg">{member}</p>
-                            {isToday && todayPages && (
-                              <p className="text-emerald-300 text-sm">
-                                Today: Pages {todayPages.start}-{todayPages.end} • {pagesReadToday}/{PAGES_PER_PERSON} done
+                            <div className="flex items-center gap-2">
+                              <p className="text-white font-medium">{member}</p>
+                              {streak > 0 && <span className="text-orange-400 text-sm streak-fire">🔥{streak}</span>}
+                            </div>
+                            {isCurrentMonth && todayPages && (
+                              <p className="text-emerald-300 text-xs">
+                                Pages {todayPages.start}-{todayPages.end} • {pagesReadToday}/4
                               </p>
                             )}
                           </div>
                         </div>
-                        <span className="text-emerald-300 group-hover:text-amber-300">→</span>
+                        <Icons.ChevronRight />
                       </button>
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Scoring Info */}
+              <div className="mt-4 p-3 bg-white/5 rounded-xl">
+                <p className="text-emerald-300 text-xs text-center">
+                  📊 Points: Same day +{POINTS.SAME_DAY} • Next day +{POINTS.NEXT_DAY} • Later +{POINTS.LATE} • Streak bonus +{POINTS.STREAK_BONUS}/day
+                </p>
               </div>
             </div>
           </div>
@@ -451,220 +463,421 @@
       }
 
       // Main Tracker Screen
-      const todayPageNumbers = getPageNumbers(currentUser, currentDay);
+      const todayPageNumbers = getPageNumbers(currentUser, selectedDay);
+      const memberPoints = getMemberPoints(currentUser);
+      const memberStreak = getMemberStreak(currentUser);
+      const monthPages = getPagesReadByMemberForMonth(currentUser, selectedMonth, selectedYear);
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-4">
           <div className="max-w-2xl mx-auto">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <button
-                onClick={() => setCurrentUser(null)}
-                className="text-emerald-300 hover:text-white transition-colors text-sm"
+                onClick={() => { setCurrentUser(null); setView('home'); }}
+                className="text-emerald-300 hover:text-white transition-colors flex items-center gap-1"
               >
-                ← Back
+                <Icons.ChevronLeft /> Back
               </button>
               <div className="text-center">
                 <p className="text-white font-medium">{MONTH_NAMES[selectedMonth]} {selectedYear}</p>
-                <p className="text-emerald-300 text-xs">Day {currentDay} of 30</p>
               </div>
               {saving && <span className="text-amber-300 text-sm">Saving...</span>}
             </div>
 
-            {/* User Profile */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6">
+            {/* User Profile Card */}
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-4">
               <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-emerald-900 text-2xl font-bold">
-                  {currentUser.charAt(0)}
+                <div className="w-14 h-14 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center text-emerald-900 text-xl font-bold">
+                  {currentUser[0]}
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">{currentUser}</h2>
-                  <p className="text-emerald-300">Position #{getMemberPosition(currentUser) + 1} this month</p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-white">{currentUser}</h2>
+                    {memberStreak > 0 && (
+                      <span className="text-orange-400 flex items-center gap-1 streak-fire">
+                        🔥 {memberStreak} day streak!
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-emerald-300 text-sm">Position #{getMemberPosition(currentUser) + 1} this month</p>
                 </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white/10 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-300">{getPagesReadByMemberForMonth(currentUser, selectedMonth, selectedYear)}</p>
-                  <p className="text-emerald-200 text-xs">Pages This Month</p>
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-2">
+                <div className="bg-white/10 rounded-xl p-2 text-center">
+                  <p className="text-xl font-bold text-amber-300">{memberPoints}</p>
+                  <p className="text-emerald-200 text-xs">Points</p>
                 </div>
-                <div className="bg-white/10 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-300">{Math.floor(getPagesReadByMemberForMonth(currentUser, selectedMonth, selectedYear) / 20)}</p>
-                  <p className="text-emerald-200 text-xs">Juz Contributed</p>
+                <div className="bg-white/10 rounded-xl p-2 text-center">
+                  <p className="text-xl font-bold text-amber-300">{monthPages}</p>
+                  <p className="text-emerald-200 text-xs">Pages</p>
                 </div>
-                <div className="bg-white/10 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-300">{Math.round((getPagesReadByMemberForMonth(currentUser, selectedMonth, selectedYear) / 120) * 100)}%</p>
-                  <p className="text-emerald-200 text-xs">Goal Progress</p>
+                <div className="bg-white/10 rounded-xl p-2 text-center">
+                  <p className="text-xl font-bold text-amber-300">{Math.floor(monthPages/20)}</p>
+                  <p className="text-emerald-200 text-xs">Juz</p>
+                </div>
+                <div className="bg-white/10 rounded-xl p-2 text-center">
+                  <p className="text-xl font-bold text-amber-300">{memberStreak}</p>
+                  <p className="text-emerald-200 text-xs">Streak</p>
                 </div>
               </div>
             </div>
 
-            {/* Today's Reading */}
-            {isToday && (
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-amber-300"><StarIcon /></span>
-                  <h3 className="text-white font-semibold">Today's Reading (Day {currentDay})</h3>
+            {/* View Tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setView('tracker')}
+                className={`flex-1 p-2 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  view === 'tracker' ? 'bg-amber-400 text-emerald-900' : 'bg-white/10 text-white'
+                }`}
+              >
+                <Icons.Book /> Reading
+              </button>
+              <button
+                onClick={() => setView('calendar')}
+                className={`flex-1 p-2 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  view === 'calendar' ? 'bg-amber-400 text-emerald-900' : 'bg-white/10 text-white'
+                }`}
+              >
+                <Icons.Calendar /> Calendar
+              </button>
+              <button
+                onClick={() => setView('leaderboard')}
+                className={`flex-1 p-2 rounded-xl flex items-center justify-center gap-2 transition-all ${
+                  view === 'leaderboard' ? 'bg-amber-400 text-emerald-900' : 'bg-white/10 text-white'
+                }`}
+              >
+                <Icons.Trophy /> Scores
+              </button>
+            </div>
+
+            {/* Reading View */}
+            {view === 'tracker' && (
+              <>
+                {/* Day Selector */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={() => setSelectedDay(Math.max(1, selectedDay - 1))}
+                      disabled={selectedDay === 1}
+                      className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20 disabled:opacity-30"
+                    >
+                      <Icons.ChevronLeft />
+                    </button>
+                    <div className="text-center">
+                      <p className="text-white font-semibold text-lg">Day {selectedDay}</p>
+                      {selectedDay === currentDay && isCurrentMonth ? (
+                        <p className="text-amber-300 text-xs">Today</p>
+                      ) : selectedDay < currentDay || !isCurrentMonth ? (
+                        <p className="text-orange-400 text-xs">Past day (reduced points)</p>
+                      ) : (
+                        <p className="text-emerald-300 text-xs">Future day</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSelectedDay(Math.min(30, selectedDay + 1))}
+                      disabled={selectedDay === 30}
+                      className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20 disabled:opacity-30"
+                    >
+                      <Icons.ChevronRight />
+                    </button>
+                  </div>
+
+                  <p className="text-emerald-300 text-center mb-4">
+                    Your pages: <span className="text-amber-300 font-bold">{todayPageNumbers.start} - {todayPageNumbers.end}</span>
+                  </p>
+                  
+                  <div className="grid grid-cols-4 gap-3">
+                    {todayPageNumbers.pages.map((pageNum) => {
+                      const isChecked = isPageRead(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
+                      const logTime = getLogTimestamp(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
+                      const pagePoints = getPointsForPage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => togglePage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum)}
+                          className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
+                            isChecked 
+                              ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900' 
+                              : 'bg-white/10 text-white hover:bg-white/20'
+                          }`}
+                        >
+                          {isChecked ? (
+                            <>
+                              <span className="w-6 h-6"><Icons.Check /></span>
+                              <span className="text-lg font-bold">{pageNum}</span>
+                              <span className="text-xs">+{pagePoints}pts</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="w-5 h-5 mb-1"><Icons.Book /></span>
+                              <span className="text-lg font-bold">{pageNum}</span>
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {getPagesReadForDay(currentUser, selectedDay) === PAGES_PER_PERSON && (
+                    <div className="mt-4 p-3 bg-amber-400/20 rounded-xl flex items-center gap-3">
+                      <span className="text-amber-300 w-6 h-6"><Icons.Award /></span>
+                      <p className="text-amber-200 arabic">ماشاء الله! Day {selectedDay} complete! +{POINTS.FULL_DAY_BONUS} bonus points</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-emerald-300 mb-4">
-                  Your assigned pages: <span className="text-amber-300 font-semibold">{todayPageNumbers.start} - {todayPageNumbers.end}</span>
-                </p>
+
+                {/* Points Info */}
+                <div className="bg-white/10 rounded-xl p-3 mb-4">
+                  <p className="text-emerald-200 text-sm text-center">
+                    {selectedDay === currentDay && isCurrentMonth ? (
+                      <>✨ Reading today earns <span className="text-amber-300 font-bold">{POINTS.SAME_DAY} points</span> per page!</>
+                    ) : selectedDay === currentDay - 1 && isCurrentMonth ? (
+                      <>📅 Logging yesterday earns <span className="text-amber-300 font-bold">{POINTS.NEXT_DAY} points</span> per page</>
+                    ) : (
+                      <>⏰ Late logging earns <span className="text-amber-300 font-bold">{POINTS.LATE} points</span> per page</>
+                    )}
+                  </p>
+                </div>
+
+                {/* Family Progress Today */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-amber-300"><Icons.Users /></span>
+                    <h3 className="text-white font-semibold">Family - Day {selectedDay}</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {familyOrder.map((member) => {
+                      const memberPages = getPageNumbers(member, selectedDay);
+                      const pagesRead = getPagesReadForDay(member, selectedDay);
+                      const isComplete = pagesRead === PAGES_PER_PERSON;
+                      
+                      return (
+                        <div key={member} className={`p-2 rounded-xl ${member === currentUser ? 'bg-white/15' : 'bg-white/5'}`}>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                              member === currentUser 
+                                ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900'
+                                : 'bg-white/20 text-white'
+                            }`}>
+                              {member[0]}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center text-sm">
+                                <span className="text-white">{member}</span>
+                                <span className="text-emerald-300">Pages {memberPages.start}-{memberPages.end}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex-1 h-2 bg-emerald-950 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full rounded-full transition-all ${
+                                      isComplete ? 'bg-gradient-to-r from-amber-400 to-amber-300' : 'bg-emerald-600'
+                                    }`}
+                                    style={{ width: `${(pagesRead / PAGES_PER_PERSON) * 100}%` }}
+                                  />
+                                </div>
+                                <span className="text-emerald-300 text-xs">{pagesRead}/4</span>
+                                {isComplete && <span className="text-amber-300">✓</span>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Calendar View */}
+            {view === 'calendar' && (
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                <h3 className="text-white font-semibold mb-4 text-center">
+                  {currentUser}'s {MONTH_NAMES[selectedMonth]} Calendar
+                </h3>
                 
-                <div className="grid grid-cols-4 gap-3">
-                  {todayPageNumbers.pages.map((pageNum) => {
-                    const isChecked = isPageRead(currentUser, currentDay, currentMonth, currentYear, pageNum);
+                {/* Day Labels */}
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                    <div key={i} className="text-center text-emerald-300 text-xs font-medium">{d}</div>
+                  ))}
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="grid grid-cols-7 gap-1">
+                  {/* Empty cells for alignment (assuming month starts on different days) */}
+                  {Array.from({ length: new Date(selectedYear, selectedMonth, 1).getDay() }, (_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square"></div>
+                  ))}
+                  
+                  {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
+                    const dayPages = getPageNumbers(currentUser, day);
+                    const pagesRead = getPagesReadForDay(currentUser, day);
+                    const isDayToday = isCurrentMonth && day === currentDay;
+                    const isComplete = pagesRead === PAGES_PER_PERSON;
+                    const isPartial = pagesRead > 0 && pagesRead < PAGES_PER_PERSON;
+                    const isSelected = day === selectedDay;
+                    
                     return (
                       <button
-                        key={pageNum}
-                        onClick={() => togglePage(currentUser, currentDay, currentMonth, currentYear, pageNum)}
-                        disabled={!firebaseInitialized}
-                        className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
-                          isChecked 
-                            ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900' 
-                            : 'bg-white/10 text-white hover:bg-white/20'
-                        } ${!firebaseInitialized ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        key={day}
+                        onClick={() => { setSelectedDay(day); setView('tracker'); }}
+                        className={`calendar-day aspect-square rounded-lg flex flex-col items-center justify-center text-xs transition-all ${
+                          isComplete 
+                            ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900 font-bold' 
+                            : isPartial
+                            ? 'bg-amber-400/40 text-white'
+                            : isDayToday
+                            ? 'bg-white/30 text-white ring-2 ring-amber-400'
+                            : isSelected
+                            ? 'bg-white/20 text-white ring-1 ring-white'
+                            : 'bg-white/5 text-emerald-300 hover:bg-white/10'
+                        }`}
                       >
-                        {isChecked ? (
-                          <span className="w-8 h-8"><CheckIcon /></span>
+                        <span className="font-medium">{day}</span>
+                        {isComplete ? (
+                          <span>✓</span>
                         ) : (
-                          <span className="w-6 h-6 mb-1"><BookIcon /></span>
+                          <span className="text-[10px]">{pagesRead}/4</span>
                         )}
-                        <span className="text-lg font-bold">{pageNum}</span>
                       </button>
                     );
                   })}
                 </div>
-                
-                {getPagesReadToday(currentUser) === PAGES_PER_PERSON && (
-                  <div className="mt-4 p-3 bg-amber-400/20 rounded-xl flex items-center gap-3">
-                    <span className="text-amber-300"><AwardIcon /></span>
-                    <p className="text-amber-200 arabic">ماشاء الله! You completed today's reading!</p>
+
+                {/* Legend */}
+                <div className="flex justify-center gap-4 mt-4 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 rounded bg-gradient-to-br from-amber-400 to-amber-500"></div>
+                    <span className="text-emerald-200">Complete</span>
                   </div>
-                )}
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 rounded bg-amber-400/40"></div>
+                    <span className="text-emerald-200">Partial</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 rounded bg-white/10"></div>
+                    <span className="text-emerald-200">Not started</span>
+                  </div>
+                </div>
+
+                {/* Schedule List */}
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <h4 className="text-white font-semibold mb-2 text-sm">Daily Schedule</h4>
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
+                      const pages = getPageNumbers(currentUser, day);
+                      const done = getPagesReadForDay(currentUser, day);
+                      const isComplete = done === 4;
+                      const isDayToday = isCurrentMonth && day === currentDay;
+                      
+                      return (
+                        <div 
+                          key={day}
+                          onClick={() => { setSelectedDay(day); setView('tracker'); }}
+                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer ${
+                            isComplete ? 'bg-amber-400/20' : isDayToday ? 'bg-white/15' : 'bg-white/5'
+                          }`}
+                        >
+                          <span className="text-white text-sm">Day {day} {isDayToday && '(Today)'}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-300 text-sm">Pages {pages.start}-{pages.end}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              isComplete ? 'bg-amber-400 text-emerald-900' : 'bg-white/10 text-emerald-300'
+                            }`}>
+                              {done}/4
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Monthly Schedule */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6">
-              <h3 className="text-white font-semibold mb-4">Your {MONTH_NAMES[selectedMonth]} Schedule</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
-                  const pageNums = getPageNumbers(currentUser, day);
-                  let pagesRead = 0;
-                  pageNums.pages.forEach(p => {
-                    if (isPageRead(currentUser, day, selectedMonth, selectedYear, p)) pagesRead++;
-                  });
-                  const isDayToday = isToday && day === currentDay;
-                  const isComplete = pagesRead === PAGES_PER_PERSON;
-                  const isPartial = pagesRead > 0 && pagesRead < PAGES_PER_PERSON;
-                  
-                  return (
-                    <div
-                      key={day}
-                      className={`flex items-center justify-between p-3 rounded-lg ${
-                        isComplete 
-                          ? 'bg-gradient-to-r from-amber-400/30 to-amber-500/30' 
-                          : isPartial
-                          ? 'bg-amber-400/20'
-                          : isDayToday
-                          ? 'bg-white/20 ring-2 ring-amber-400'
-                          : 'bg-white/5'
+            {/* Leaderboard View */}
+            {view === 'leaderboard' && (
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-4 justify-center">
+                  <span className="text-amber-300"><Icons.Trophy /></span>
+                  <h3 className="text-white font-semibold">Family Leaderboard</h3>
+                </div>
+
+                <div className="space-y-3">
+                  {getLeaderboard().map((member, idx) => (
+                    <div 
+                      key={member.name}
+                      className={`p-4 rounded-xl ${
+                        member.name === currentUser ? 'bg-white/15 ring-2 ring-amber-400' : 'bg-white/5'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                          isComplete ? 'bg-amber-400 text-emerald-900' : 'bg-white/20 text-white'
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg ${
+                          idx === 0 ? 'bg-amber-400 text-emerald-900' :
+                          idx === 1 ? 'bg-gray-300 text-gray-800' :
+                          idx === 2 ? 'bg-amber-600 text-white' :
+                          'bg-white/20 text-white'
                         }`}>
-                          {isComplete ? '✓' : day}
-                        </div>
-                        <span className="text-white">Day {day}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-amber-300 font-medium">Pages {pageNums.start}-{pageNums.end}</span>
-                        <span className="text-emerald-400 text-sm ml-2">({pagesRead}/{PAGES_PER_PERSON})</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Family Overview */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-amber-300"><UsersIcon /></span>
-                <h3 className="text-white font-semibold">Family Progress {isToday ? 'Today' : ''}</h3>
-              </div>
-              <div className="space-y-3">
-                {familyOrder.map((member) => {
-                  const memberPages = isToday ? getPageNumbers(member, currentDay) : null;
-                  const todayPagesRead = isToday ? getPagesReadToday(member) : 0;
-                  const monthPagesRead = getPagesReadByMemberForMonth(member, selectedMonth, selectedYear);
-                  const isComplete = todayPagesRead === PAGES_PER_PERSON;
-                  
-                  return (
-                    <div key={member} className={`p-3 rounded-xl ${member === currentUser ? 'bg-white/15' : 'bg-white/5'}`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                          member === currentUser 
-                            ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900'
-                            : 'bg-white/20 text-white'
-                        }`}>
-                          {member.charAt(0)}
+                          {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
                         </div>
                         <div className="flex-1">
-                          <div className="flex justify-between items-center">
-                            <span className="text-white font-medium">{member}</span>
-                            {isToday && memberPages && (
-                              <span className="text-emerald-300 text-sm">Pages {memberPages.start}-{memberPages.end}</span>
+                          <div className="flex items-center gap-2">
+                            <p className="text-white font-bold text-lg">{member.name}</p>
+                            {member.streak > 0 && (
+                              <span className="text-orange-400 flex items-center gap-1 text-sm streak-fire">
+                                🔥 {member.streak}
+                              </span>
                             )}
                           </div>
-                          {isToday ? (
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="flex-1 h-2 bg-emerald-950 rounded-full overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${
-                                    isComplete ? 'bg-gradient-to-r from-amber-400 to-amber-300' : 'bg-emerald-600'
-                                  }`}
-                                  style={{ width: `${(todayPagesRead / PAGES_PER_PERSON) * 100}%` }}
-                                />
-                              </div>
-                              <span className="text-emerald-300 text-xs">{todayPagesRead}/{PAGES_PER_PERSON}</span>
-                              {isComplete && <span className="text-amber-300">✓</span>}
-                            </div>
-                          ) : (
-                            <p className="text-emerald-400 text-sm">{monthPagesRead} pages read</p>
-                          )}
+                          <div className="flex gap-4 text-sm">
+                            <span className="text-emerald-300">{member.pages} pages</span>
+                            <span className="text-emerald-300">{Math.floor(member.pages/20)} juz</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-amber-300">{member.points}</p>
+                          <p className="text-emerald-300 text-xs">points</p>
                         </div>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              
-              {/* Daily Juz Progress */}
-              {isToday && (
-                <div className="mt-6 pt-4 border-t border-white/10">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-emerald-200">Today's Juz Progress</span>
-                    <span className="text-amber-300 font-semibold">
-                      {BASE_FAMILY_ORDER.reduce((sum, m) => sum + getPagesReadToday(m), 0)}/20 pages
-                    </span>
-                  </div>
-                  <div className="h-3 bg-emerald-950 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-amber-400 to-amber-300 rounded-full transition-all duration-500"
-                      style={{ 
-                        width: `${Math.min((BASE_FAMILY_ORDER.reduce((sum, m) => sum + getPagesReadToday(m), 0) / 20) * 100, 100)}%` 
-                      }}
-                    />
+                  ))}
+                </div>
+
+                {/* Scoring Explanation */}
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <h4 className="text-white font-semibold mb-2 text-sm">How Points Work</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between text-emerald-200">
+                      <span>✨ Read & log same day</span>
+                      <span className="text-amber-300">+{POINTS.SAME_DAY} pts/page</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200">
+                      <span>📅 Log next day</span>
+                      <span className="text-amber-300">+{POINTS.NEXT_DAY} pts/page</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200">
+                      <span>⏰ Log later</span>
+                      <span className="text-amber-300">+{POINTS.LATE} pts/page</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200">
+                      <span>📖 Complete all 4 pages</span>
+                      <span className="text-amber-300">+{POINTS.FULL_DAY_BONUS} pts bonus</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200">
+                      <span>🔥 Each streak day</span>
+                      <span className="text-amber-300">+{POINTS.STREAK_BONUS} pts bonus</span>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Footer */}
-            <p className="text-center text-emerald-400 text-sm mt-6 mb-4 arabic">
+            <p className="text-center text-emerald-400 text-sm mt-4 mb-4 arabic">
               جَزَاكُمُ اللَّهُ خَيْرًا - May Allah reward your efforts
             </p>
           </div>
