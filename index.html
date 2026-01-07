@@ -20,6 +20,28 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
     }
+    .quran-modal {
+      animation: fadeIn 0.3s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .quran-page-img {
+      max-height: 70vh;
+      width: auto;
+      margin: 0 auto;
+      border-radius: 8px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .page-loading {
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer {
+      0% { opacity: 0.5; }
+      50% { opacity: 1; }
+      100% { opacity: 0.5; }
+    }
   </style>
 </head>
 <body>
@@ -56,13 +78,19 @@
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
+    // Quran Page Image URL (using reliable Mushaf images)
+    const getQuranPageUrl = (pageNum) => {
+      const paddedNum = String(pageNum).padStart(3, '0');
+      return `https://www.mp3quran.net/api/quran_pages_arabic/${paddedNum}.png`;
+    };
+
     // Scoring System
     const POINTS = {
-      SAME_DAY: 10,      // Reading and logging on the same day
-      NEXT_DAY: 5,       // Logging the next day
-      LATE: 2,           // Logging 2+ days later
-      STREAK_BONUS: 5,   // Bonus per day of streak
-      FULL_DAY_BONUS: 5  // Bonus for completing all 4 pages
+      SAME_DAY: 10,
+      NEXT_DAY: 5,
+      LATE: 2,
+      STREAK_BONUS: 5,
+      FULL_DAY_BONUS: 5
     };
 
     // Icons
@@ -77,7 +105,175 @@
       Fire: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
       ChevronLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>,
       ChevronRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>,
+      X: () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+      Eye: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>,
+      BookOpen: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
     };
+
+    // Quran Page Viewer Modal Component
+    function QuranViewer({ pageNum, onClose, onMarkRead, isRead, assignedPages }) {
+      const [currentPage, setCurrentPage] = React.useState(pageNum);
+      const [loading, setLoading] = React.useState(true);
+      const [imageError, setImageError] = React.useState(false);
+
+      const isAssignedPage = assignedPages.includes(currentPage);
+
+      const handlePrevPage = () => {
+        if (currentPage > 1) {
+          setCurrentPage(currentPage - 1);
+          setLoading(true);
+          setImageError(false);
+        }
+      };
+
+      const handleNextPage = () => {
+        if (currentPage < 604) {
+          setCurrentPage(currentPage + 1);
+          setLoading(true);
+          setImageError(false);
+        }
+      };
+
+      // Handle keyboard navigation
+      React.useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'ArrowLeft') handleNextPage(); // RTL - left arrow goes forward
+          if (e.key === 'ArrowRight') handlePrevPage(); // RTL - right arrow goes back
+          if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [currentPage]);
+
+      return (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 quran-modal">
+          <div className="relative w-full max-w-3xl">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={onClose}
+                  className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"
+                >
+                  <Icons.X />
+                </button>
+                <div>
+                  <h2 className="text-white font-bold text-lg">صفحة {currentPage}</h2>
+                  <p className="text-emerald-300 text-sm">Page {currentPage} of 604</p>
+                </div>
+              </div>
+              
+              {isAssignedPage && (
+                <button
+                  onClick={() => onMarkRead(currentPage)}
+                  className={`px-4 py-2 rounded-xl flex items-center gap-2 transition-all ${
+                    isRead(currentPage)
+                      ? 'bg-amber-400 text-emerald-900'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  {isRead(currentPage) ? (
+                    <>
+                      <Icons.Check /> Completed
+                    </>
+                  ) : (
+                    <>
+                      <Icons.Book /> Mark as Read
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Page Image */}
+            <div className="relative bg-white/5 rounded-2xl p-4 min-h-[50vh] flex items-center justify-center">
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-4xl page-loading mb-2">📖</div>
+                    <p className="text-emerald-300">Loading page...</p>
+                  </div>
+                </div>
+              )}
+              
+              {imageError ? (
+                <div className="text-center">
+                  <div className="text-4xl mb-2">⚠️</div>
+                  <p className="text-white mb-2">Could not load page image</p>
+                  <a 
+                    href={`https://quran.com/page/${currentPage}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-300 underline"
+                  >
+                    Open on Quran.com →
+                  </a>
+                </div>
+              ) : (
+                <img
+                  src={getQuranPageUrl(currentPage)}
+                  alt={`Quran Page ${currentPage}`}
+                  className={`quran-page-img ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
+                  onLoad={() => setLoading(false)}
+                  onError={() => { setLoading(false); setImageError(true); }}
+                />
+              )}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between mt-4">
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage >= 604}
+                className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                Next <Icons.ChevronLeft />
+              </button>
+
+              <div className="flex items-center gap-2">
+                {assignedPages.map(p => (
+                  <button
+                    key={p}
+                    onClick={() => { setCurrentPage(p); setLoading(true); setImageError(false); }}
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold transition-all ${
+                      p === currentPage
+                        ? 'bg-amber-400 text-emerald-900'
+                        : isRead(p)
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage <= 1}
+                className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl text-white hover:bg-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <Icons.ChevronRight /> Prev
+              </button>
+            </div>
+
+            {/* Page indicator for assigned pages */}
+            {isAssignedPage && (
+              <div className="mt-4 p-3 bg-amber-400/20 rounded-xl text-center">
+                <p className="text-amber-200 text-sm">
+                  📖 This is one of your assigned pages for today
+                </p>
+              </div>
+            )}
+
+            {/* Keyboard hints */}
+            <p className="text-center text-emerald-400/50 text-xs mt-3">
+              Use ← → arrow keys to navigate • ESC to close
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     function QuranTracker() {
       const [currentUser, setCurrentUser] = React.useState(null);
@@ -88,7 +284,8 @@
       const [selectedMonth, setSelectedMonth] = React.useState(null);
       const [selectedYear, setSelectedYear] = React.useState(null);
       const [selectedDay, setSelectedDay] = React.useState(null);
-      const [view, setView] = React.useState('home'); // home, tracker, calendar, leaderboard
+      const [view, setView] = React.useState('home');
+      const [quranViewerPage, setQuranViewerPage] = React.useState(null);
 
       const today = new Date();
       const currentDay = Math.min(today.getDate(), 30);
@@ -115,7 +312,6 @@
         return () => dataRef.off();
       }, []);
 
-      // Get rotated family order based on month
       const getRotatedOrder = (month, year) => {
         const monthsSinceStart = (year - 2026) * 12 + month;
         const rotation = ((monthsSinceStart % 5) + 5) % 5;
@@ -174,7 +370,6 @@
         return logTimestamps[key] ? new Date(logTimestamps[key]) : null;
       };
 
-      // Calculate points for a single page
       const getPointsForPage = (memberId, day, month, year, pageNumber) => {
         if (!isPageRead(memberId, day, month, year, pageNumber)) return 0;
         
@@ -189,7 +384,6 @@
         return POINTS.LATE;
       };
 
-      // Calculate total points for a member
       const getMemberPoints = (memberId, month = selectedMonth, year = selectedYear) => {
         let points = 0;
         const monthOrder = getRotatedOrder(month, year);
@@ -209,20 +403,17 @@
             }
           }
           
-          // Bonus for completing all 4 pages in a day
           if (dayComplete) {
             points += POINTS.FULL_DAY_BONUS;
           }
         }
 
-        // Streak bonus
         const streak = getMemberStreak(memberId, month, year);
         points += streak * POINTS.STREAK_BONUS;
 
         return points;
       };
 
-      // Calculate streak (consecutive days completed)
       const getMemberStreak = (memberId, month = selectedMonth, year = selectedYear) => {
         let streak = 0;
         const monthOrder = getRotatedOrder(month, year);
@@ -277,7 +468,6 @@
 
       const isCurrentMonth = selectedMonth === currentMonth && selectedYear === currentYear;
 
-      // Get leaderboard sorted by points
       const getLeaderboard = () => {
         return BASE_FAMILY_ORDER
           .map(member => ({
@@ -287,6 +477,25 @@
             streak: getMemberStreak(member)
           }))
           .sort((a, b) => b.points - a.points);
+      };
+
+      // Handle mark as read from Quran viewer
+      const handleMarkReadFromViewer = (pageNum) => {
+        if (currentUser && selectedDay) {
+          togglePage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
+        }
+      };
+
+      // Check if page is read (for viewer)
+      const isPageReadForViewer = (pageNum) => {
+        if (!currentUser || !selectedDay) return false;
+        return isPageRead(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
+      };
+
+      // Get assigned pages for current view
+      const getAssignedPagesForViewer = () => {
+        if (!currentUser || !selectedDay) return [];
+        return getPageNumbers(currentUser, selectedDay).pages;
       };
 
       if (loading || selectedMonth === null) {
@@ -454,7 +663,7 @@
               {/* Scoring Info */}
               <div className="mt-4 p-3 bg-white/5 rounded-xl">
                 <p className="text-emerald-300 text-xs text-center">
-                  📊 Points: Same day +{POINTS.SAME_DAY} • Next day +{POINTS.NEXT_DAY} • Later +{POINTS.LATE} • Streak bonus +{POINTS.STREAK_BONUS}/day
+                  📊 Points: Same day +{POINTS.SAME_DAY} • Next day +{POINTS.NEXT_DAY} • Later +{POINTS.LATE} • Streak +{POINTS.STREAK_BONUS}/day
                 </p>
               </div>
             </div>
@@ -470,6 +679,17 @@
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-emerald-800 to-teal-900 p-4">
+          {/* Quran Viewer Modal */}
+          {quranViewerPage && (
+            <QuranViewer
+              pageNum={quranViewerPage}
+              onClose={() => setQuranViewerPage(null)}
+              onMarkRead={handleMarkReadFromViewer}
+              isRead={isPageReadForViewer}
+              assignedPages={getAssignedPagesForViewer()}
+            />
+          )}
+
           <div className="max-w-2xl mx-auto">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
@@ -589,35 +809,52 @@
                     Your pages: <span className="text-amber-300 font-bold">{todayPageNumbers.start} - {todayPageNumbers.end}</span>
                   </p>
                   
-                  <div className="grid grid-cols-4 gap-3">
+                  {/* Page Cards - Clickable to open Quran */}
+                  <div className="grid grid-cols-2 gap-3">
                     {todayPageNumbers.pages.map((pageNum) => {
                       const isChecked = isPageRead(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
-                      const logTime = getLogTimestamp(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
                       const pagePoints = getPointsForPage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum);
                       
                       return (
-                        <button
+                        <div
                           key={pageNum}
-                          onClick={() => togglePage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum)}
-                          className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-all ${
+                          className={`rounded-xl overflow-hidden transition-all ${
                             isChecked 
-                              ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-emerald-900' 
-                              : 'bg-white/10 text-white hover:bg-white/20'
+                              ? 'bg-gradient-to-br from-amber-400 to-amber-500' 
+                              : 'bg-white/10'
                           }`}
                         >
-                          {isChecked ? (
-                            <>
-                              <span className="w-6 h-6"><Icons.Check /></span>
-                              <span className="text-lg font-bold">{pageNum}</span>
-                              <span className="text-xs">+{pagePoints}pts</span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="w-5 h-5 mb-1"><Icons.Book /></span>
-                              <span className="text-lg font-bold">{pageNum}</span>
-                            </>
-                          )}
-                        </button>
+                          {/* Open Quran Button */}
+                          <button
+                            onClick={() => setQuranViewerPage(pageNum)}
+                            className={`w-full p-3 flex items-center justify-center gap-2 transition-all ${
+                              isChecked ? 'text-emerald-900 hover:bg-black/10' : 'text-white hover:bg-white/10'
+                            }`}
+                          >
+                            <Icons.BookOpen />
+                            <span className="font-bold">Page {pageNum}</span>
+                          </button>
+                          
+                          {/* Mark as Read Button */}
+                          <button
+                            onClick={() => togglePage(currentUser, selectedDay, selectedMonth, selectedYear, pageNum)}
+                            className={`w-full p-2 flex items-center justify-center gap-2 border-t transition-all ${
+                              isChecked 
+                                ? 'border-amber-500 text-emerald-900 hover:bg-black/10' 
+                                : 'border-white/10 text-emerald-300 hover:bg-white/10'
+                            }`}
+                          >
+                            {isChecked ? (
+                              <>
+                                <Icons.Check /> Done (+{pagePoints}pts)
+                              </>
+                            ) : (
+                              <>
+                                Mark Complete
+                              </>
+                            )}
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -625,9 +862,16 @@
                   {getPagesReadForDay(currentUser, selectedDay) === PAGES_PER_PERSON && (
                     <div className="mt-4 p-3 bg-amber-400/20 rounded-xl flex items-center gap-3">
                       <span className="text-amber-300 w-6 h-6"><Icons.Award /></span>
-                      <p className="text-amber-200 arabic">ماشاء الله! Day {selectedDay} complete! +{POINTS.FULL_DAY_BONUS} bonus points</p>
+                      <p className="text-amber-200 arabic">ماشاء الله! Day {selectedDay} complete! +{POINTS.FULL_DAY_BONUS} bonus</p>
                     </div>
                   )}
+                </div>
+
+                {/* Quick tip */}
+                <div className="bg-white/5 rounded-xl p-3 mb-4 text-center">
+                  <p className="text-emerald-300 text-sm">
+                    📖 Tap <strong>"Page X"</strong> to read the Quran • Tap <strong>"Mark Complete"</strong> when done
+                  </p>
                 </div>
 
                 {/* Points Info */}
@@ -708,13 +952,11 @@
 
                 {/* Calendar Grid */}
                 <div className="grid grid-cols-7 gap-1">
-                  {/* Empty cells for alignment (assuming month starts on different days) */}
                   {Array.from({ length: new Date(selectedYear, selectedMonth, 1).getDay() }, (_, i) => (
                     <div key={`empty-${i}`} className="aspect-square"></div>
                   ))}
                   
                   {Array.from({ length: 30 }, (_, i) => i + 1).map((day) => {
-                    const dayPages = getPageNumbers(currentUser, day);
                     const pagesRead = getPagesReadForDay(currentUser, day);
                     const isDayToday = isCurrentMonth && day === currentDay;
                     const isComplete = pagesRead === PAGES_PER_PERSON;
